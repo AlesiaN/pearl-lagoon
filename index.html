@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Pearl Lagoon</title>
+<meta name="theme-color" content="#2FA4C4">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Pearl Lagoon">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+  :root{
+    --lagoon:#8EEBE3; --sea:#2FA4C4; --deep:#45409A;
+    --coral:#FF7EB0; --pearl:#FFF6E8; --gold:#FFD166; --mint:#B8F2D2;
+    --inset-t:env(safe-area-inset-top,0px); --inset-b:env(safe-area-inset-bottom,0px);
+    --inset-l:env(safe-area-inset-left,0px); --inset-r:env(safe-area-inset-right,0px);
+  }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --sea:#2FA4C4; } }
+  :root[data-theme="dark"]{ --sea:#2FA4C4; }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;overflow:hidden;background:var(--sea);
+    user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:none;overscroll-behavior:none}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+
+  .hud{position:fixed;z-index:5;top:calc(var(--inset-t) + 14px)}
+  #stars{left:calc(var(--inset-l) + 14px);display:flex;gap:6px;padding:8px 12px;border-radius:40px;
+    background:rgba(255,255,255,.18);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+  #stars svg{width:clamp(30px,6vw,44px);height:auto;transition:transform .3s}
+  #stars .s path{fill:rgba(255,255,255,.25);stroke:rgba(255,255,255,.8);stroke-width:3;transition:fill .3s}
+  #stars .s.on path{fill:var(--gold);stroke:#fff}
+  #stars .s.on{animation:starPop .5s cubic-bezier(.3,1.8,.5,1)}
+  @keyframes starPop{0%{transform:scale(.4) rotate(-40deg)}100%{transform:scale(1) rotate(0)}}
+
+  #sound{right:calc(var(--inset-r) + 14px);width:60px;height:60px;border-radius:50%;border:none;padding:0;
+    background:rgba(255,255,255,.22);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);cursor:pointer;display:grid;place-items:center}
+  #sound svg{width:30px;height:30px}
+  #sound:focus-visible{outline:3px solid #fff;outline-offset:3px}
+  #sound .waves{transition:opacity .2s}
+  #sound.off .waves{opacity:0}
+  #sound .cross{opacity:0}
+  #sound.off .cross{opacity:1}
+
+  #mermaid{position:fixed;z-index:3;left:calc(var(--inset-l) + 5%);top:24%;width:min(40vw,36vh);
+    animation:bob 4.5s ease-in-out infinite;cursor:pointer}
+  #mermaid .inner{transform-origin:50% 45%}
+  #mermaid.twirl .inner{animation:twirl .9s cubic-bezier(.4,.1,.3,1)}
+  @keyframes bob{0%,100%{transform:translate(0,0) rotate(-3deg)}50%{transform:translate(12px,-18px) rotate(3deg)}}
+  @keyframes twirl{0%{transform:scale(1) rotate(0)}40%{transform:scale(1.15) rotate(200deg)}100%{transform:scale(1) rotate(360deg)}}
+  #mermaid .tailfin{transform-origin:116px 262px;animation:swish 1.6s ease-in-out infinite}
+  @keyframes swish{0%,100%{transform:rotate(-8deg)}50%{transform:rotate(8deg)}}
+
+  #clam{position:fixed;z-index:3;right:calc(var(--inset-r) + 5%);bottom:calc(var(--inset-b) + 2vh);
+    width:min(34vw,24vh);cursor:pointer}
+  #clam .lid{transform-origin:24px 96px;transition:transform .6s cubic-bezier(.3,1.6,.5,1)}
+  #clam.open .lid{transform:rotate(-32deg)}
+  #clam .pearl{transition:transform .6s cubic-bezier(.3,1.6,.5,1)}
+  #clam.open .pearl{transform:translateY(-14px)}
+  #clam .glow{opacity:0;transition:opacity .6s}
+  #clam.open .glow{opacity:1}
+  #clam:not(.opened-once){animation:nudge 2.4s ease-in-out infinite}
+  @keyframes nudge{0%,80%,100%{transform:scale(1)}88%{transform:scale(1.08)}94%{transform:scale(.97)}}
+
+  @media (prefers-reduced-motion: reduce){
+    #mermaid,#mermaid .tailfin,#clam:not(.opened-once){animation:none}
+  }
+</style>
+</head>
+<body>
+<canvas id="sea" aria-label="Underwater lagoon. Tap bubbles, fish, the mermaid and the shell."></canvas>
+
+<div id="stars" class="hud" aria-label="Magic stars">
+  <svg class="s" viewBox="0 0 60 60"><path d="M30 5l7 16 17 2-13 11 4 17-15-9-15 9 4-17L6 23l17-2z" stroke-linejoin="round"/></svg>
+  <svg class="s" viewBox="0 0 60 60"><path d="M30 5l7 16 17 2-13 11 4 17-15-9-15 9 4-17L6 23l17-2z" stroke-linejoin="round"/></svg>
+  <svg class="s" viewBox="0 0 60 60"><path d="M30 5l7 16 17 2-13 11 4 17-15-9-15 9 4-17L6 23l17-2z" stroke-linejoin="round"/></svg>
+  <svg class="s" viewBox="0 0 60 60"><path d="M30 5l7 16 17 2-13 11 4 17-15-9-15 9 4-17L6 23l17-2z" stroke-linejoin="round"/></svg>
+  <svg class="s" viewBox="0 0 60 60"><path d="M30 5l7 16 17 2-13 11 4 17-15-9-15 9 4-17L6 23l17-2z" stroke-linejoin="round"/></svg>
+</div>
+
+<button id="sound" class="hud" aria-label="Sound on or off">
+  <svg viewBox="0 0 32 32" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M5 12h5l7-6v20l-7-6H5z" fill="#fff"/>
+    <g class="waves"><path d="M21 11.5a6 6 0 0 1 0 9"/><path d="M24.5 8a11 11 0 0 1 0 16"/></g>
+    <g class="cross"><path d="M22 12l7 8M29 12l-7 8"/></g>
+  </svg>
+</button>
+
+<div id="mermaid" role="button" aria-label="Mermaid">
+  <div class="inner">
+  <svg viewBox="0 0 200 310">
+    <defs>
+      <linearGradient id="tailG" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#6FF0D2"/><stop offset=".5" stop-color="#2FB5C9"/><stop offset="1" stop-color="#7A62E0"/>
+      </linearGradient>
+      <linearGradient id="hairG" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#B07CF5"/><stop offset="1" stop-color="#FF8CC0"/>
+      </linearGradient>
+      <linearGradient id="finG" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#FFB3D4"/><stop offset="1" stop-color="#FF5E9C"/>
+      </linearGradient>
+      <pattern id="scales" width="12" height="10" patternUnits="userSpaceOnUse">
+        <path d="M0 10a6 6 0 0 1 12 0" fill="none" stroke="rgba(255,255,255,.45)" stroke-width="1.5"/>
+      </pattern>
+    </defs>
+    <path d="M58 78C38 122 36 178 60 214c6-26 4-56 18-80h44c14 24 12 54 18 80 24-36 22-92 2-136C130 38 70 38 58 78z" fill="url(#hairG)"/>
+    <g class="tailfin">
+      <path d="M108 258c-22 8-34 28-26 44 16-6 26-16 32-30 6 16 20 26 38 28 4-18-10-34-28-44z" fill="url(#finG)"/>
+    </g>
+    <path d="M80 148c-10 44 0 84 28 112l18-6c-14-28-6-62-4-106z" fill="url(#tailG)"/>
+    <path d="M80 148c-10 44 0 84 28 112l18-6c-14-28-6-62-4-106z" fill="url(#scales)"/>
+    <path d="M78 150c14 6 30 6 44 0" stroke="#FFD166" stroke-width="5" stroke-linecap="round" fill="none"/>
+    <path d="M84 104c-4 20-6 34-6 46h44c0-12-2-26-6-46z" fill="#F6C9A8"/>
+    <path d="M86 114c-16 10-20 26-12 38" stroke="#F6C9A8" stroke-width="10" stroke-linecap="round" fill="none"/>
+    <path d="M114 114c16-8 22-20 22-34" stroke="#F6C9A8" stroke-width="10" stroke-linecap="round" fill="none"/>
+    <circle cx="136" cy="76" r="7" fill="#F6C9A8"/>
+    <path d="M85 124c0-9 14-9 14 0zM101 124c0-9 14-9 14 0z" fill="#FF8CC0" stroke="#fff" stroke-width="1.5"/>
+    <rect x="93" y="96" width="14" height="14" fill="#F6C9A8"/>
+    <circle cx="100" cy="78" r="30" fill="#F6C9A8"/>
+    <path d="M69 80c-3-30 20-42 36-38 22 4 30 22 26 40-8-14-20-20-34-18-12 2-22 8-28 16z" fill="url(#hairG)"/>
+    <path d="M86 82q5-6 10 0M104 82q5-6 10 0" stroke="#4A2B5E" stroke-width="3" stroke-linecap="round" fill="none"/>
+    <circle cx="84" cy="91" r="6" fill="#FF8FB3" opacity=".6"/><circle cx="116" cy="91" r="6" fill="#FF8FB3" opacity=".6"/>
+    <path d="M93 95q7 8 14 0" stroke="#C2456F" stroke-width="3" stroke-linecap="round" fill="none"/>
+    <path d="M126 44l4 9 10 1-7 7 2 10-9-5-9 5 2-10-7-7 10-1z" fill="#FFD166" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/>
+  </svg>
+  </div>
+</div>
+
+<div id="clam" role="button" aria-label="Shell with a pearl">
+  <svg viewBox="0 0 200 160" overflow="visible">
+    <defs>
+      <radialGradient id="pearlG" cx=".35" cy=".3" r=".8">
+        <stop offset="0" stop-color="#fff"/><stop offset=".5" stop-color="#FFF1F7"/><stop offset="1" stop-color="#E6D6FF"/>
+      </radialGradient>
+      <radialGradient id="glowG"><stop offset="0" stop-color="#FFF6E8" stop-opacity=".95"/><stop offset="1" stop-color="#FFD166" stop-opacity="0"/></radialGradient>
+      <linearGradient id="shellG" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#FFC2DA"/><stop offset="1" stop-color="#FF86B5"/>
+      </linearGradient>
+    </defs>
+    <circle class="glow" cx="100" cy="74" r="62" fill="url(#glowG)"/>
+    <g class="pearl"><circle cx="100" cy="88" r="17" fill="url(#pearlG)"/><circle cx="94" cy="82" r="4" fill="#fff"/></g>
+    <path d="M18 96Q100 176 182 96z" fill="url(#shellG)"/>
+    <path d="M100 96v38M72 96l-12 30M128 96l12 30M46 96l-18 16M154 96l18 16" stroke="rgba(255,255,255,.55)" stroke-width="3" stroke-linecap="round"/>
+    <g class="lid">
+      <path d="M18 96Q100 4 182 96z" fill="url(#shellG)" stroke="#fff" stroke-width="2"/>
+      <path d="M100 94V40M100 94L66 50M100 94l34-44M100 94L40 70M100 94l60-24" stroke="rgba(255,255,255,.6)" stroke-width="3" stroke-linecap="round"/>
+    </g>
+  </svg>
+</div>
+
+<script>
+(() => {
+  const cv = document.getElementById('sea'), ctx = cv.getContext('2d');
+  let W = 0, H = 0, DPR = 1, sandTop = 0, t = 0;
+  const TAU = Math.PI * 2, rand = (a, b) => a + Math.random() * (b - a);
+
+  // ---------- sound ----------
+  let ac = null, master = null, soundOn = true;
+  const SCALE = [523.25, 587.33, 659.25, 783.99, 880, 1046.5, 1174.66, 1318.51, 1567.98, 1760];
+  function initAudio() {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    if (!ac) {
+      ac = new AC();
+      master = ac.createGain(); master.gain.value = soundOn ? 0.32 : 0;
+      const delay = ac.createDelay(), fb = ac.createGain(), wet = ac.createGain();
+      delay.delayTime.value = 0.19; fb.gain.value = 0.32; wet.gain.value = 0.28;
+      master.connect(ac.destination); master.connect(delay);
+      delay.connect(fb); fb.connect(delay); delay.connect(wet); wet.connect(ac.destination);
+    }
+    if (ac.state === 'suspended') ac.resume();
+  }
+  function chime(f, when = 0, vol = 0.45, dur = 1.3) {
+    if (!ac || !soundOn) return;
+    const now = ac.currentTime + when;
+    const g = ac.createGain(), o = ac.createOscillator(), o2 = ac.createOscillator(), g2 = ac.createGain();
+    o.type = 'sine'; o.frequency.value = f; o2.type = 'triangle'; o2.frequency.value = f * 2.003; g2.gain.value = 0.12;
+    g.gain.setValueAtTime(0.0001, now); g.gain.exponentialRampToValueAtTime(vol, now + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+    o.connect(g); o2.connect(g2); g2.connect(g); g.connect(master);
+    o.start(now); o2.start(now); o.stop(now + dur + 0.05); o2.stop(now + dur + 0.05);
+  }
+  function popSound() {
+    if (!ac || !soundOn) return;
+    const now = ac.currentTime, o = ac.createOscillator(), g = ac.createGain();
+    o.type = 'sine'; o.frequency.setValueAtTime(rand(280, 420), now); o.frequency.exponentialRampToValueAtTime(1500, now + 0.07);
+    g.gain.setValueAtTime(0.0001, now); g.gain.exponentialRampToValueAtTime(0.5, now + 0.004); g.gain.exponentialRampToValueAtTime(0.0001, now + 0.11);
+    o.connect(g); g.connect(master); o.start(now); o.stop(now + 0.14);
+  }
+  const noteAt = x => SCALE[Math.max(0, Math.min(SCALE.length - 1, Math.floor(x / W * SCALE.length)))];
+  const arpeggio = (n = SCALE.length, gap = 0.085) => SCALE.slice(0, n).forEach((f, i) => chime(f, i * gap, 0.32, 1.6));
+
+  const soundBtn = document.getElementById('sound');
+  soundBtn.addEventListener('click', () => {
+    soundOn = !soundOn; initAudio();
+    if (master) master.gain.value = soundOn ? 0.32 : 0;
+    soundBtn.classList.toggle('off', !soundOn);
+    if (soundOn) chime(1046.5);
+  });
+
+  // ---------- world ----------
+  const bubbles = [], parts = [], fish = [], weeds = [], motes = [];
+  let rainbow = 0;
+  const FISH_COLORS = [['#FFE08A', '#FF9F43'], ['#FFB3D4', '#FF5E9C'], ['#D6C8FF', '#8B6CF0'], ['#B8F2D2', '#22B894']];
+
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = innerWidth; H = innerHeight;
+    cv.width = W * DPR; cv.height = H * DPR; ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    sandTop = H - Math.max(64, H * 0.13);
+    weeds.length = 0;
+    const n = Math.max(5, Math.round(W / 110));
+    for (let i = 0; i < n; i++) weeds.push({
+      x: (i + rand(0.2, 0.8)) * W / n, h: rand(0.18, 0.36) * H, ph: rand(0, TAU),
+      col: ['#3FD9A8', '#2AB7A0', '#7BE3C3', '#9A7CF0'][i % 4], w: rand(10, 16)
+    });
+    if (!fish.length) for (let i = 0; i < 4; i++) fish.push(newFish(i, true));
+    if (!motes.length) for (let i = 0; i < 40; i++) motes.push({ x: rand(0, 1), y: rand(0, 1), p: rand(0, TAU), s: rand(1, 2.4) });
+  }
+  function fishSize() { return Math.max(26, Math.min(46, W * 0.055)); }
+  function newFish(i, anywhere) {
+    const dir = Math.random() < 0.5 ? 1 : -1, s = fishSize() * rand(0.85, 1.15);
+    const c = FISH_COLORS[i % FISH_COLORS.length];
+    return { x: anywhere ? rand(0, W) : (dir > 0 ? -s * 2 : W + s * 2), y: rand(H * 0.2, sandTop - s * 2),
+      dir, s, v: rand(40, 70), ph: rand(0, TAU), c1: c[0], c2: c[1], spin: 0, boost: 0, i };
+  }
+  function spawnBubble(x, y, r) {
+    r = r || rand(22, 42) * Math.max(0.8, Math.min(1.3, W / 700));
+    bubbles.push({ x: x ?? rand(r, W - r), y: y ?? H + r, r, vy: rand(26, 48), ph: rand(0, TAU), hue: rand(160, 320) });
+  }
+
+  // ---------- particles ----------
+  function add(p) { if (parts.length < 500) parts.push(p); }
+  function sparkles(x, y, n, spread = 180, hueBase) {
+    for (let i = 0; i < n; i++) {
+      const a = rand(0, TAU), sp = rand(spread * 0.3, spread);
+      add({ type: 'spark', x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rand(0.6, 1.1), max: 1.1,
+        size: rand(5, 11), hue: hueBase ?? rand(0, 360), rot: rand(0, TAU), vr: rand(-4, 4) });
+    }
+  }
+  function droplets(x, y, n, r) {
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * TAU + rand(-0.2, 0.2), sp = rand(80, 170);
+      add({ type: 'drop', x: x + Math.cos(a) * r * 0.6, y: y + Math.sin(a) * r * 0.6, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+        life: 0.55, max: 0.55, size: rand(3, 6) });
+    }
+  }
+  function hearts(x, y, n) {
+    for (let i = 0; i < n; i++) add({ type: 'heart', x: x + rand(-30, 30), y: y + rand(-20, 20), vx: rand(-50, 50), vy: rand(-160, -70),
+      life: rand(1.2, 1.8), max: 1.8, size: rand(14, 24), hue: rand(320, 350), rot: rand(-0.4, 0.4), vr: rand(-1, 1) });
+  }
+  function miniBubbles(x, y, n) {
+    for (let i = 0; i < n; i++) add({ type: 'bub', x: x + rand(-8, 8), y, vx: rand(-20, 20), vy: rand(-120, -60),
+      life: rand(1, 1.6), max: 1.6, size: rand(4, 9) });
+  }
+
+  // ---------- magic stars ----------
+  const starEls = [...document.querySelectorAll('#stars .s')];
+  let score = 0, filled = 0, magicBusy = false;
+  function reward() {
+    if (magicBusy) return;
+    score++;
+    if (score % 3 === 0 && filled < 5) {
+      starEls[filled].classList.add('on'); filled++;
+      chime(1567.98, 0.05, 0.35); chime(2093, 0.14, 0.3);
+      if (filled === 5) setTimeout(magic, 450);
+    }
+  }
+  function magic() {
+    magicBusy = true; rainbow = 1;
+    arpeggio();
+    twirlMermaid();
+    for (let i = 0; i < 12; i++) setTimeout(() => sparkles(rand(0, W), rand(0, H * 0.7), 14, 220), i * 120);
+    for (let i = 0; i < 10; i++) spawnBubble(rand(0, W), H + rand(0, 200));
+    setTimeout(() => { starEls.forEach(s => s.classList.remove('on')); filled = 0; score = 0; magicBusy = false; }, 4200);
+  }
+
+  // ---------- mermaid & clam ----------
+  const mer = document.getElementById('mermaid');
+  function centerOf(el) { const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height * 0.35 }; }
+  function twirlMermaid() {
+    mer.classList.remove('twirl'); void mer.offsetWidth; mer.classList.add('twirl');
+    const c = centerOf(mer); hearts(c.x, c.y, 9); sparkles(c.x, c.y, 16, 200, 300);
+  }
+  mer.addEventListener('pointerdown', e => {
+    e.stopPropagation(); initAudio(); twirlMermaid();
+    [1046.5, 1318.51, 1567.98, 2093].forEach((f, i) => chime(f, i * 0.07, 0.3, 1));
+  });
+  mer.addEventListener('animationend', e => { if (e.animationName === 'twirl') mer.classList.remove('twirl'); });
+
+  const clam = document.getElementById('clam');
+  clam.addEventListener('pointerdown', e => {
+    e.stopPropagation(); initAudio();
+    const open = clam.classList.toggle('open'); clam.classList.add('opened-once');
+    const r = clam.getBoundingClientRect(), px = r.left + r.width / 2, py = r.top + r.height * 0.5;
+    if (open) {
+      sparkles(px, py, 26, 240, 45); miniBubbles(px, py, 10);
+      [659.25, 783.99, 1046.5, 1318.51, 1567.98].forEach((f, i) => chime(f, i * 0.1, 0.35, 1.8));
+      reward();
+    } else { chime(392, 0, 0.3, 0.8); chime(523.25, 0.08, 0.25, 0.8); miniBubbles(px, py, 5); }
+  });
+
+  // ---------- pointer on sea ----------
+  const pointers = new Map();
+  function hitBubble(x, y) {
+    for (let i = bubbles.length - 1; i >= 0; i--) {
+      const b = bubbles[i]; if (Math.hypot(b.x - x, b.y - y) < b.r + 16) { popBubble(i); return true; }
+    }
+    return false;
+  }
+  function popBubble(i) {
+    const b = bubbles[i]; bubbles.splice(i, 1);
+    droplets(b.x, b.y, 10, b.r); sparkles(b.x, b.y, 7, 150, b.hue);
+    popSound(); chime(noteAt(b.x), 0.02, 0.4); reward();
+  }
+  function hitFish(x, y) {
+    for (const f of fish) {
+      const fy = f.y + Math.sin(t * 2 + f.ph) * 6;
+      if (Math.hypot(f.x - x, fy - y) < f.s * 1.5) {
+        f.spin = 1; f.boost = 1;
+        miniBubbles(f.x + f.dir * f.s, fy, 6); sparkles(f.x, fy, 8, 140, 45);
+        popSound(); chime(noteAt(x), 0, 0.35); chime(noteAt(x) * 1.25, 0.12, 0.3); reward();
+        return true;
+      }
+    }
+    return false;
+  }
+  cv.addEventListener('pointerdown', e => {
+    initAudio();
+    const x = e.clientX, y = e.clientY;
+    pointers.set(e.pointerId, { x, y, lastNote: 0, acc: 0 });
+    if (hitFish(x, y) || hitBubble(x, y)) return;
+    miniBubbles(x, y, 6); sparkles(x, y, 6, 110);
+    chime(noteAt(x), 0, 0.28, 1);
+  });
+  cv.addEventListener('pointermove', e => {
+    const p = pointers.get(e.pointerId); if (!p) return;
+    const x = e.clientX, y = e.clientY, d = Math.hypot(x - p.x, y - p.y);
+    if (d < 6) return;
+    const steps = Math.min(4, Math.ceil(d / 14));
+    for (let i = 1; i <= steps; i++) {
+      const sx = p.x + (x - p.x) * i / steps, sy = p.y + (y - p.y) * i / steps;
+      add({ type: 'spark', x: sx, y: sy, vx: rand(-30, 30), vy: rand(-40, 10), life: 0.9, max: 0.9,
+        size: rand(5, 9), hue: (t * 120 + sx * 0.3) % 360, rot: rand(0, TAU), vr: rand(-3, 3) });
+      hitBubble(sx, sy);
+    }
+    p.acc += d;
+    if (p.acc > 70 && performance.now() - p.lastNote > 110) { chime(noteAt(x), 0, 0.18, 0.9); p.acc = 0; p.lastNote = performance.now(); }
+    p.x = x; p.y = y;
+  });
+  const end = e => pointers.delete(e.pointerId);
+  cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end); cv.addEventListener('pointerleave', end);
+  document.addEventListener('contextmenu', e => e.preventDefault());
+  document.addEventListener('gesturestart', e => e.preventDefault());
+
+  // ---------- drawing ----------
+  function star4(x, y, r) {
+    ctx.moveTo(x, y - r); ctx.quadraticCurveTo(x, y, x + r, y); ctx.quadraticCurveTo(x, y, x, y + r);
+    ctx.quadraticCurveTo(x, y, x - r, y); ctx.quadraticCurveTo(x, y, x, y - r);
+  }
+  function heartPath(x, y, s) {
+    ctx.moveTo(x, y + s * 0.35);
+    ctx.bezierCurveTo(x - s * 0.9, y - s * 0.25, x - s * 0.35, y - s * 0.95, x, y - s * 0.35);
+    ctx.bezierCurveTo(x + s * 0.35, y - s * 0.95, x + s * 0.9, y - s * 0.25, x, y + s * 0.35);
+  }
+  function drawBackground() {
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#8EEBE3'); g.addColorStop(0.35, '#3FB6CC'); g.addColorStop(0.75, '#3C7FBF'); g.addColorStop(1, '#45409A');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    // light rays
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 5; i++) {
+      const x = (i / 5) * W * 1.3 - W * 0.15 + Math.sin(t * 0.2 + i) * 40, w = 50 + i * 12;
+      const rg = ctx.createLinearGradient(0, 0, 0, H * 0.85);
+      rg.addColorStop(0, 'rgba(255,255,240,0.14)'); rg.addColorStop(1, 'rgba(255,255,240,0)');
+      ctx.fillStyle = rg; ctx.beginPath();
+      ctx.moveTo(x, 0); ctx.lineTo(x + w, 0); ctx.lineTo(x + w * 2.2 + 120, H * 0.85); ctx.lineTo(x + 120, H * 0.85); ctx.fill();
+    }
+    ctx.restore();
+    // drifting motes
+    for (const m of motes) {
+      const a = 0.35 + 0.35 * Math.sin(t * 2 + m.p);
+      ctx.fillStyle = `rgba(255,255,255,${a})`; ctx.beginPath();
+      ctx.arc((m.x * W + Math.sin(t * 0.3 + m.p) * 20) % W, (m.y * H + t * 6) % H, m.s, 0, TAU); ctx.fill();
+    }
+  }
+  function drawRainbow(dt) {
+    if (rainbow <= 0) return;
+    rainbow = Math.max(0, rainbow - dt / 4.5);
+    const a = Math.min(1, (1 - rainbow) * 4) * Math.min(1, rainbow * 3);
+    const cols = ['#FF6B8B', '#FFA24C', '#FFD166', '#7BE38F', '#5CC8FF', '#8B7CFF', '#D58CFF'];
+    const R = Math.min(W, H) * 0.6, bw = Math.max(10, R * 0.045);
+    ctx.save(); ctx.globalAlpha = a * 0.75; ctx.lineWidth = bw; ctx.lineCap = 'round';
+    cols.forEach((c, i) => { ctx.strokeStyle = c; ctx.beginPath(); ctx.arc(W / 2, H * 0.78, R - i * bw, Math.PI, TAU); ctx.stroke(); });
+    ctx.restore();
+  }
+  function drawWeeds() {
+    for (const w of weeds) {
+      const segs = 9; let px = w.x, py = sandTop + 10;
+      for (let i = 1; i <= segs; i++) {
+        const k = i / segs, nx = w.x + Math.sin(t * 1.1 + w.ph + k * 2.2) * k * 28, ny = sandTop + 10 - w.h * k;
+        ctx.strokeStyle = w.col; ctx.lineCap = 'round'; ctx.lineWidth = w.w * (1 - k * 0.7);
+        ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(nx, ny); ctx.stroke(); px = nx; py = ny;
+      }
+    }
+  }
+  function drawSand() {
+    const g = ctx.createLinearGradient(0, sandTop, 0, H);
+    g.addColorStop(0, '#FBE3B6'); g.addColorStop(1, '#F2BFA0');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(0, H);
+    for (let x = 0; x <= W + 20; x += 20) ctx.lineTo(x, sandTop + Math.sin(x * 0.012) * 10 + Math.sin(x * 0.031) * 5);
+    ctx.lineTo(W, H); ctx.fill();
+    // little shells & starfish in the sand
+    const spots = Math.max(4, Math.round(W / 160));
+    for (let i = 0; i < spots; i++) {
+      const x = (i + 0.5) * W / spots, y = sandTop + (H - sandTop) * (0.45 + 0.25 * ((i * 7) % 3) / 2);
+      ctx.fillStyle = i % 2 ? 'rgba(255,140,180,.8)' : 'rgba(255,209,102,.9)';
+      ctx.beginPath();
+      if (i % 2) { ctx.arc(x, y, 8, Math.PI, TAU); ctx.fill(); }
+      else { for (let k = 0; k < 10; k++) { const r = k % 2 ? 4 : 10, a = k / 10 * TAU - Math.PI / 2; ctx.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r); } ctx.fill(); }
+    }
+  }
+  function drawBubble(b) {
+    const g = ctx.createRadialGradient(b.x - b.r * 0.3, b.y - b.r * 0.3, b.r * 0.1, b.x, b.y, b.r);
+    g.addColorStop(0, 'rgba(255,255,255,0.05)'); g.addColorStop(0.8, 'rgba(255,255,255,0.12)'); g.addColorStop(1, 'rgba(255,255,255,0.45)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, TAU); ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,255,255,0.75)'; ctx.stroke();
+    ctx.lineWidth = 3; ctx.strokeStyle = `hsla(${(b.hue + t * 40) % 360},90%,78%,0.55)`;
+    ctx.beginPath(); ctx.arc(b.x, b.y, b.r - 3, 0.2, 1.6); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.beginPath();
+    ctx.ellipse(b.x - b.r * 0.38, b.y - b.r * 0.4, b.r * 0.22, b.r * 0.12, -0.7, 0, TAU); ctx.fill();
+  }
+  function drawFish(f) {
+    const s = f.s, y = f.y + Math.sin(t * 2 + f.ph) * 6;
+    ctx.save(); ctx.translate(f.x, y);
+    if (f.spin > 0) ctx.rotate((1 - f.spin) * TAU * f.dir);
+    ctx.scale(f.dir, 1);
+    const w = Math.sin(t * 10 + f.ph) * 0.22 * s;
+    ctx.fillStyle = f.c2; ctx.beginPath();
+    ctx.moveTo(-s * 0.8, 0); ctx.lineTo(-s * 1.4, -s * 0.55 + w); ctx.quadraticCurveTo(-s * 1.2, 0, -s * 1.4, s * 0.55 + w); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-s * 0.3, -s * 0.5); ctx.quadraticCurveTo(0, -s * 1.05, s * 0.35, -s * 0.55); ctx.closePath(); ctx.fill();
+    const g = ctx.createLinearGradient(0, -s * 0.6, 0, s * 0.6); g.addColorStop(0, f.c1); g.addColorStop(1, f.c2);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(0, 0, s, s * 0.64, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.beginPath(); ctx.ellipse(-s * 0.2, 0, s * 0.12, s * 0.52, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(s * 0.46, -s * 0.12, s * 0.21, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#3A2350'; ctx.beginPath(); ctx.arc(s * 0.51, -s * 0.1, s * 0.12, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(s * 0.55, -s * 0.15, s * 0.045, 0, TAU); ctx.fill();
+    ctx.fillStyle = 'rgba(255,110,160,.5)'; ctx.beginPath(); ctx.arc(s * 0.38, s * 0.2, s * 0.1, 0, TAU); ctx.fill();
+    ctx.strokeStyle = '#3A2350'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.arc(s * 0.7, s * 0.06, s * 0.1, 0.3, 1.9); ctx.stroke();
+    ctx.restore();
+  }
+  function drawParts() {
+    for (const p of parts) {
+      const a = Math.max(0, p.life / p.max);
+      ctx.save(); ctx.globalAlpha = a; ctx.beginPath();
+      if (p.type === 'spark') {
+        ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+        ctx.fillStyle = `hsl(${p.hue},100%,82%)`; ctx.shadowColor = `hsl(${p.hue},100%,70%)`; ctx.shadowBlur = 10;
+        star4(0, 0, p.size * (0.6 + a * 0.4)); ctx.fill();
+      } else if (p.type === 'heart') {
+        ctx.translate(p.x, p.y); ctx.rotate(p.rot); ctx.fillStyle = `hsl(${p.hue},95%,72%)`;
+        heartPath(0, 0, p.size); ctx.fill();
+      } else if (p.type === 'drop') {
+        ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.arc(p.x, p.y, p.size * a, 0, TAU); ctx.fill();
+      } else {
+        ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 1.6; ctx.arc(p.x, p.y, p.size, 0, TAU); ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
+
+  // ---------- loop ----------
+  let last = performance.now(), spawnT = 0;
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now; t += dt;
+    spawnT -= dt;
+    if (spawnT <= 0 && bubbles.length < Math.max(8, Math.round(W / 70))) { spawnBubble(); spawnT = rand(0.5, 1.1); }
+    for (let i = bubbles.length - 1; i >= 0; i--) {
+      const b = bubbles[i]; b.y -= b.vy * dt; b.x += Math.sin(t * 1.4 + b.ph) * 0.5;
+      if (b.y < -b.r) bubbles.splice(i, 1);
+    }
+    for (let i = 0; i < fish.length; i++) {
+      const f = fish[i];
+      f.x += f.dir * f.v * (1 + f.boost * 2.5) * dt;
+      f.spin = Math.max(0, f.spin - dt * 1.5); f.boost = Math.max(0, f.boost - dt * 0.8);
+      if ((f.dir > 0 && f.x > W + f.s * 2) || (f.dir < 0 && f.x < -f.s * 2)) fish[i] = newFish(f.i, false);
+    }
+    for (let i = parts.length - 1; i >= 0; i--) {
+      const p = parts[i]; p.life -= dt;
+      if (p.life <= 0) { parts.splice(i, 1); continue; }
+      p.x += p.vx * dt; p.y += p.vy * dt;
+      if (p.type === 'bub') { p.x += Math.sin(t * 6 + i) * 0.4; }
+      else { p.vx *= 0.94; p.vy = p.vy * 0.94 + (p.type === 'heart' ? -10 : 18) * dt; }
+      if (p.rot !== undefined) p.rot += (p.vr || 0) * dt;
+    }
+    drawBackground(); drawRainbow(dt); drawWeeds(); drawSand();
+    fish.forEach(drawFish); bubbles.forEach(drawBubble); drawParts();
+    requestAnimationFrame(frame);
+  }
+  addEventListener('resize', resize);
+  resize(); requestAnimationFrame(frame);
+
+  // ---------- offline support ----------
+  if ('serviceWorker' in navigator && location.protocol === 'https:') {
+    try { navigator.serviceWorker.register('sw.js').catch(() => {}); } catch (e) {}
+  }
+})();
+</script>
+</body>
+</html>
